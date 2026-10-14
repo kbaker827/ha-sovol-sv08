@@ -18,6 +18,7 @@ rebuilt for the SV08's stock Klipper setup.
 
 - [How it works](#how-it-works)
 - [Features](#features)
+- [Sovol eddy probe upgrade](#sovol-eddy-probe-upgrade)
 - [Dashboard card](#dashboard-card)
 - [Installation](#installation)
 - [Configuration](#configuration)
@@ -61,11 +62,12 @@ neopixel strip shows up without any configuration.
 | Filament used | Millimetres of filament extruded |
 | Filename | File being printed (slicer and its estimate as attributes) |
 | Nozzle / Bed temperature and target | Current and target temperatures; `power` and `max_temp` as attributes |
-| Part cooling fan | Fan speed in % |
+| Part cooling fan | Fan speed in %. The SV08 has no Klipper `[fan]`; its part cooling is `fan0` + `fan1`, which this reads |
 | Print speed / Flow rate | Current `M220` / `M221` overrides in % |
 | Bed mesh profile | Name of the loaded mesh, e.g. `default` |
+| Probe Z result | Last probe reading in mm (inductive probe or eddy); `triggered` as attribute |
 | Every `temperature_sensor` | e.g. MCU and host temperature, a chamber thermistor |
-| Every other fan | Hotend fan, controller fan, exhaust fan (`heater_fan`, `controller_fan`, `fan_generic`, `temperature_fan`) |
+| Every other fan | On a stock SV08: back and front part fans (`fan0`, `fan1`), exhaust fan (`fan3`) and hotend fan. Any `heater_fan`, `controller_fan`, `fan_generic` or `temperature_fan` is picked up |
 | Klipper state / Toolhead position | Diagnostics |
 
 ### Binary sensors
@@ -75,6 +77,7 @@ neopixel strip shows up without any configuration.
 | Printing / Paused | Print job state |
 | Error | On for a print error or a Klipper shutdown (message in attributes) |
 | Gantry leveled | On once `QUAD_GANTRY_LEVEL` has been applied since the last restart |
+| Eddy probe calibrated | With Sovol's eddy upgrade: on once the eddy probe has been calibrated |
 | Filament runout | One per `filament_switch_sensor` / `filament_motion_sensor`; on when filament is **not** detected |
 
 ### Buttons
@@ -84,7 +87,8 @@ neopixel strip shows up without any configuration.
 | Emergency stop | Halts the printer at once (`M112`) |
 | Home all / Home X / Y / Z | `G28` |
 | Quad gantry level | Homes if needed, runs `QUAD_GANTRY_LEVEL`, then re-homes Z |
-| Bed mesh calibrate | Homes if needed, then `BED_MESH_CALIBRATE` |
+| Bed mesh calibrate | Homes if needed, levels the gantry if it isn't yet, then `BED_MESH_CALIBRATE` |
+| Z offset calibrate | Sovol's `Z_OFFSET_CALIBRATION` (probe-to-nozzle offset), homing first if needed |
 | Restart Klipper / Firmware restart | Firmware restart also resets the MCUs, which is what you need after an MCU shutdown |
 
 Homing, leveling and meshing run in the background, so the button returns
@@ -146,6 +150,27 @@ connection status and the camera URLs. Your API key is redacted.
 
 ---
 
+## Sovol eddy probe upgrade
+
+With Sovol's eddy probe upgrade (the same `[probe_eddy_current eddy]` setup
+the SV08 Max ships with), the integration adds:
+
+| Entity | What it shows |
+|---|---|
+| `binary_sensor.<printer>_eddy_probe_calibrated` | Whether the eddy probe has been calibrated (`PROBE_EDDY_CURRENT_CALIBRATE`) |
+| `sensor.<printer>_probe_z_result` | The last probe reading |
+| `button.<printer>_z_offset_calibrate` | Runs Sovol's `Z_OFFSET_CALIBRATION` |
+
+On the eddy firmware Sovol's own `BED_MESH_CALIBRATE` macro already levels the
+gantry and calibrates Z offset, so the **Bed mesh calibrate** button leaves
+that to the macro instead of leveling twice.
+
+Sovol's eddy (an LDC1612) has no coil temperature sensor, so there is no
+eddy temperature entity. An eddy with a `[temperature_probe]` (e.g. a BTT
+Eddy) isn't supported yet. Its MCU `temperature_sensor` still shows up.
+
+---
+
 ## Dashboard card
 
 The integration ships its own dashboard card. It loads automatically, so
@@ -175,8 +200,9 @@ What it shows:
   thermistor or enclosure heater. Tap one to set its target.
 - 🔥 **Preheat presets** when idle: one tap sets nozzle and bed (PLA, PETG,
   ABS, TPU) or turns both off.
-- 📐 **Gantry and mesh status**: whether QGL has been run and which bed mesh
-  is loaded.
+- 📐 **Gantry, mesh and eddy status**: whether QGL has been run, which bed
+  mesh is loaded and, with Sovol's eddy upgrade, whether the eddy probe is
+  calibrated.
 - **Speed, flow and fan** at a glance. Tap to adjust.
 - ⚠️ **Alerts** for Klipper errors and filament runout.
 - 🎛️ **Controls**: Pause/Resume, Cancel, Light, Home, QGL and E-Stop.

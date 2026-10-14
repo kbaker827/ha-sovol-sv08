@@ -211,6 +211,18 @@ PRINTER_SENSORS: list[SovolSensorEntityDescription] = [
     ),
 ]
 
+PROBE_Z_SENSOR = SovolSensorEntityDescription(
+    key="probe_last_z",
+    translation_key="probe_last_z",
+    entity_category=EntityCategory.DIAGNOSTIC,
+    device_class=SensorDeviceClass.DISTANCE,
+    native_unit_of_measurement=UnitOfLength.MILLIMETERS,
+    suggested_display_precision=3,
+    icon="mdi:arrow-collapse-down",
+    value_fn=lambda data: data.probe_last_z,
+    attrs_fn=lambda data: {"triggered": data.probe_triggered},
+)
+
 BED_MESH_SENSOR = SovolSensorEntityDescription(
     key="bed_mesh_profile",
     translation_key="bed_mesh_profile",
@@ -231,6 +243,8 @@ async def async_setup_entry(
     descriptions = list(PRINTER_SENSORS)
     if objects.has_bed_mesh:
         descriptions.append(BED_MESH_SENSOR)
+    if objects.has_probe or objects.eddy_probe:
+        descriptions.append(PROBE_Z_SENSOR)
     descriptions += [_temperature_sensor(key) for key in objects.temperature_sensors]
     descriptions += [_extra_fan_sensor(key) for key in objects.extra_fans]
     descriptions += [_chamber_heater_sensor(key) for key in objects.chamber_heaters]

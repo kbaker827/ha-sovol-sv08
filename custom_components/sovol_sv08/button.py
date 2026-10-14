@@ -101,6 +101,15 @@ BUTTON_DESCRIPTIONS: list[SovolButtonEntityDescription] = [
         long_running=True,
     ),
     SovolButtonEntityDescription(
+        key="z_offset_calibrate",
+        translation_key="z_offset_calibrate",
+        icon="mdi:arrow-expand-vertical",
+        press_fn=lambda client: client.z_offset_calibrate(),
+        available_fn=_idle_and_ready,
+        exists_fn=lambda objects: objects.has_z_offset_calibration,
+        long_running=True,
+    ),
+    SovolButtonEntityDescription(
         key="restart_klipper",
         translation_key="restart_klipper",
         entity_category=EntityCategory.CONFIG,

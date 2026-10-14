@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import copy
 
-from fake_moonraker import SV08_OBJECTS, SV08_SETTINGS, SV08_STATUS
+from fake_moonraker import SV08_EDDY_OBJECTS, SV08_OBJECTS, SV08_SETTINGS, SV08_STATUS
 from pysovol.models import SovolPrinterData
 from pysovol.parser import (
     DiscoveredObjects,
@@ -26,17 +26,31 @@ class TestDiscovery:
         assert objects.filament_sensors == ("filament_switch_sensor filament_sensor",)
         assert objects.temperature_sensors == (
             "temperature_sensor mcu_temp",
-            "temperature_sensor host_temp",
+            "temperature_sensor Host_temp",
+            "temperature_sensor Toolhead_Temp",
         )
         assert objects.extra_fans == (
+            "fan_generic fan0",
+            "fan_generic fan1",
+            "fan_generic fan3",
             "heater_fan hotend_fan",
-            "controller_fan controller_fan",
-            "fan_generic exhaust_fan",
         )
-        assert objects.fan_generics == ("fan_generic exhaust_fan",)
+        assert objects.part_fans == ("fan_generic fan0", "fan_generic fan1")
+        # The beeper pin and the screen's neopixel must not win over the LED bar.
         assert objects.light == "output_pin main_led"
-        assert objects.has_qgl and objects.has_bed_mesh
+        assert objects.has_qgl and objects.has_bed_mesh and objects.has_probe
+        assert objects.has_z_offset_calibration
+        assert objects.eddy_probe is None
         assert objects.chamber_heaters == ()
+
+    def test_finds_sovol_eddy_probe(self):
+        objects = DiscoveredObjects.from_object_list(SV08_EDDY_OBJECTS)
+        assert objects.eddy_probe == "probe_eddy_current eddy"
+        assert "probe_eddy_current eddy" in objects.all_objects()
+
+    def test_printer_with_a_fan_section_uses_it(self):
+        objects = DiscoveredObjects.from_object_list(["fan", "fan_generic fan0"])
+        assert objects.part_fans == ("fan",)
 
     def test_prefers_main_led_over_other_lights(self):
         objects = DiscoveredObjects.from_object_list(
@@ -58,10 +72,15 @@ class TestDiscovery:
         assert "print_stats" in everything
         assert "quad_gantry_level" in everything
         assert "output_pin main_led" in everything
-        assert "fan_generic exhaust_fan" in everything
+        assert "fan_generic fan3" in everything
+        assert "probe" in everything
+        assert "fan" not in everything  # a stock SV08 has no [fan]
 
     def test_object_label(self):
         assert object_label("temperature_sensor host_temp") == "Host Temp"
+        assert object_label("fan_generic fan0") == "Back Part Fan"
+        assert object_label("fan_generic fan3") == "Exhaust Fan"
+        assert object_label("fan_generic nevermore") == "Nevermore"
 
 
 class TestApplyStatus:
@@ -88,6 +107,39 @@ class TestApplyStatus:
         assert data.is_homed
         assert data.idle_state == "Printing"
         assert data.display_message == "Printing benchy"
+
+    def test_part_fan_speed_from_sv08_fan_generics(self):
+        data = SovolPrinterData()
+        objects = sv08_objects()
+        apply_status(data, {"fan_generic fan0": {"speed": 0.4}, "fan_generic fan1": {"speed": 0.6}}, objects)
+        assert data.fan_speed == 60.0
+        # The exhaust fan is not part cooling.
+        apply_status(data, {"fan_generic fan3": {"speed": 1.0}}, objects)
+        assert data.fan_speed == 60.0
+
+    def test_klipper_fan_section(self):
+        data = SovolPrinterData()
+        objects = DiscoveredObjects.from_object_list(["fan"])
+        apply_status(data, {"fan": {"speed": 0.25}}, objects)
+        assert data.fan_speed == 25.0
+
+    def test_eddy_probe_status(self):
+        data = SovolPrinterData()
+        objects = DiscoveredObjects.from_object_list(SV08_EDDY_OBJECTS)
+        apply_status(
+            data,
+            {"probe_eddy_current eddy": {"last_query": True, "last_z_result": 0.01234, "is_calibrated": False}},
+            objects,
+        )
+        assert data.probe_last_z == 0.0123
+        assert data.probe_triggered is True
+        assert data.eddy_calibrated is False
+
+    def test_inductive_probe_has_no_calibration_flag(self):
+        data = SovolPrinterData()
+        apply_status(data, {"probe": {"last_query": False, "last_z_result": -0.05}}, sv08_objects())
+        assert data.probe_last_z == -0.05
+        assert data.eddy_calibrated is None
 
     def test_partial_update_keeps_other_fields(self):
         data = SovolPrinterData()

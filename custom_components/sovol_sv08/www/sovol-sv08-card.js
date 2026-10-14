@@ -7,7 +7,7 @@
  * gantry leveling, preheat presets and print controls for one printer.
  */
 
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.2.0";
 const DOMAIN = "sovol_sv08";
 
 const ACCENTS = {
@@ -615,6 +615,11 @@ class SovolSV08Card extends HTMLElement {
     if (mesh) {
       const loaded = !["unknown", "unavailable", ""].includes(mesh.state);
       stats.push(this._stat("mdi:grid", loaded ? mesh.state : "None", "Mesh", mesh.entity_id, loaded ? "" : "warn"));
+    }
+    const eddy = this._state("binary_sensor.eddy_calibrated");
+    if (eddy && eddy.state !== "unavailable") {
+      const ok = eddy.state === "on";
+      stats.push(this._stat("mdi:radar", ok ? "Calibrated" : "Not calibrated", "Eddy", eddy.entity_id, ok ? "" : "warn"));
     }
     return stats.length ? `<div class="stats">${stats.join("")}</div>` : "";
   }

@@ -66,6 +66,15 @@ QGL_SENSOR = SovolBinarySensorEntityDescription(
 )
 
 
+# Sovol's eddy upgrade reports whether PROBE_EDDY_CURRENT_CALIBRATE was done.
+EDDY_CALIBRATED_SENSOR = SovolBinarySensorEntityDescription(
+    key="eddy_calibrated",
+    translation_key="eddy_calibrated",
+    icon="mdi:radar",
+    value_fn=lambda data: data.eddy_calibrated,
+)
+
+
 def _filament_sensor(object_key: str) -> SovolBinarySensorEntityDescription:
     """On (problem) when the runout sensor does NOT detect filament."""
 
@@ -105,6 +114,8 @@ async def async_setup_entry(
     descriptions = list(PRINTER_BINARY_SENSORS)
     if objects.has_qgl:
         descriptions.append(QGL_SENSOR)
+    if objects.eddy_probe:
+        descriptions.append(EDDY_CALIBRATED_SENSOR)
     descriptions += [_filament_sensor(key) for key in objects.filament_sensors]
 
     async_add_entities(SovolBinarySensor(coordinator, desc) for desc in descriptions)

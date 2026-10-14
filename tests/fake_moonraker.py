@@ -6,6 +6,8 @@ import json
 
 from aiohttp import web
 
+# Object names from Sovol's stock SV08 printer.cfg (github.com/Sovol3d/SV08).
+# Note there is no [fan]: part cooling is fan_generic fan0 (back) + fan1 (front).
 SV08_OBJECTS = [
     "webhooks",
     "configfile",
@@ -16,24 +18,37 @@ SV08_OBJECTS = [
     "virtual_sdcard",
     "pause_resume",
     "display_status",
-    "gcode_macro PRINT_START",
+    "gcode_macro QUAD_GANTRY_LEVEL",
+    "gcode_macro BED_MESH_CALIBRATE",
     "heaters",
     "idle_timeout",
     "toolhead",
     "extruder",
     "heater_bed",
-    "fan",
+    "fan_generic fan0",
+    "fan_generic fan1",
+    "fan_generic fan3",
     "heater_fan hotend_fan",
-    "controller_fan controller_fan",
-    "fan_generic exhaust_fan",
     "temperature_sensor mcu_temp",
-    "temperature_sensor host_temp",
+    "temperature_sensor Host_temp",
+    "temperature_sensor Toolhead_Temp",
     "filament_switch_sensor filament_sensor",
+    "output_pin beeper",
+    "neopixel Screen_Colour",
     "output_pin main_led",
     "probe",
+    "z_offset_calibration",
     "quad_gantry_level",
     "bed_mesh",
     "motion_report",
+]
+
+# Sovol's eddy upgrade, as on the SV08 Max: [probe_eddy_current eddy]
+# replaces [probe] (and registers itself as "probe" too).
+SV08_EDDY_OBJECTS = [
+    *[o for o in SV08_OBJECTS if o != "probe"],
+    "probe",
+    "probe_eddy_current eddy",
 ]
 
 SV08_STATUS = {
@@ -51,18 +66,26 @@ SV08_STATUS = {
     "heater_bed": {"temperature": 64.98, "target": 65.0, "power": 0.2},
     "toolhead": {"position": [175.0, 175.0, 2.4, 100.0], "homed_axes": "xyz"},
     "gcode_move": {"speed_factor": 1.5, "extrude_factor": 0.95},
-    "fan": {"speed": 0.8},
     "display_status": {"message": "Printing benchy"},
     "idle_timeout": {"state": "Printing"},
     "quad_gantry_level": {"applied": True},
     "bed_mesh": {"profile_name": "default"},
+    "fan_generic fan0": {"speed": 0.8},
+    "fan_generic fan1": {"speed": 0.8},
+    "fan_generic fan3": {"speed": 0.0},
     "heater_fan hotend_fan": {"speed": 1.0},
-    "controller_fan controller_fan": {"speed": 0.5},
-    "fan_generic exhaust_fan": {"speed": 0.0},
     "temperature_sensor mcu_temp": {"temperature": 41.23},
-    "temperature_sensor host_temp": {"temperature": 52.1},
+    "temperature_sensor Host_temp": {"temperature": 52.1},
+    "temperature_sensor Toolhead_Temp": {"temperature": 36.4},
     "filament_switch_sensor filament_sensor": {"enabled": True, "filament_detected": True},
     "output_pin main_led": {"value": 1.0},
+    "probe": {"name": "probe", "last_query": False, "last_z_result": 0.0123},
+    "probe_eddy_current eddy": {
+        "name": "probe_eddy_current eddy",
+        "last_query": False,
+        "last_z_result": 0.0123,
+        "is_calibrated": True,
+    },
 }
 
 SV08_SETTINGS = {

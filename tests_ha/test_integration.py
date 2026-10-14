@@ -77,6 +77,7 @@ class TestSetup:
             "sensor.sovol_sv08_bed_mesh_profile": "default",
             "sensor.sovol_sv08_mcu_temp": "41.2",
             "sensor.sovol_sv08_exhaust_fan": "0.0",
+            "sensor.sovol_sv08_toolhead_temp": "36.4",
             "binary_sensor.sovol_sv08_gantry_leveled": "on",
             "binary_sensor.sovol_sv08_filament_sensor": "off",
             "switch.sovol_sv08_light": "on",
@@ -91,6 +92,28 @@ class TestSetup:
         assert hass.states.get("number.sovol_sv08_exhaust_fan_speed") is not None
         # Leveling is not allowed mid-print
         assert hass.states.get("button.sovol_sv08_quad_gantry_level").state == "unavailable"
+
+    async def test_stock_sv08_fans_and_probe(self, hass, setup_entry):
+        # No [fan] on an SV08: part cooling is read from fan0/fan1 (80 % in the fake).
+        assert hass.states.get("sensor.sovol_sv08_part_cooling_fan").state == "80.0"
+        assert hass.states.get("sensor.sovol_sv08_back_part_fan").state == "80.0"
+        assert hass.states.get("number.sovol_sv08_exhaust_fan_speed") is not None
+        assert hass.states.get("sensor.sovol_sv08_probe_z_result").state == "0.0123"
+        assert hass.states.get("button.sovol_sv08_z_offset_calibrate") is not None
+        # Inductive probe: no eddy entity
+        assert hass.states.get("binary_sensor.sovol_sv08_eddy_probe_calibrated") is None
+
+    async def test_sovol_eddy_upgrade(self, hass, entry, moonraker):
+        from fake_moonraker import SV08_EDDY_OBJECTS
+
+        moonraker.objects = list(SV08_EDDY_OBJECTS)
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert hass.states.get("binary_sensor.sovol_sv08_eddy_probe_calibrated").state == "on"
+        assert hass.states.get("sensor.sovol_sv08_probe_z_result").state == "0.0123"
+        await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
 
     async def test_unique_ids_use_entry_id(self, hass, setup_entry):
         registry = er.async_get(hass)

@@ -11,17 +11,28 @@ from .const import (
     OPTIONAL_OBJECTS,
     PRINTER_OBJECTS,
     RE_CHAMBER_HEATER,
+    RE_EDDY_PROBE,
     RE_EXTRA_FAN,
     RE_FILAMENT_SENSOR,
     RE_LIGHT_LED,
     RE_LIGHT_PIN,
+    RE_PART_FAN,
     RE_TEMP_SENSOR,
+    Z_OFFSET_CALIBRATION_OBJECT,
 )
 from .models import FileMetadata, FilamentSensor, HeaterData, SovolPrinterData
 
 # Output pins with these names are the stock SV08 LED bar; preferred over
 # any other light-like object.
 _PREFERRED_LIGHTS = ("output_pin main_led",)
+
+# Friendly names for the SV08's numbered fans (from Sovol's printer.cfg)
+_SV08_FAN_LABELS = {
+    "fan0": "Back Part Fan",
+    "fan1": "Front Part Fan",
+    "fan2": "Auxiliary Fan",
+    "fan3": "Exhaust Fan",
+}
 
 
 @dataclass(frozen=True)
@@ -34,6 +45,8 @@ class DiscoveredObjects:
     extra_fans: tuple[str, ...] = ()
     optional: tuple[str, ...] = ()
     light: str | None = None
+    eddy_probe: str | None = None
+    has_z_offset_calibration: bool = False
 
     @classmethod
     def from_object_list(cls, objects: list[str]) -> DiscoveredObjects:
@@ -43,6 +56,7 @@ class DiscoveredObjects:
         lights = [o for o in objects if o in _PREFERRED_LIGHTS]
         lights += [o for o in matching(RE_LIGHT_PIN) if o not in lights]
         lights += list(matching(RE_LIGHT_LED))
+        eddy = matching(RE_EDDY_PROBE)
         return cls(
             filament_sensors=matching(RE_FILAMENT_SENSOR),
             temperature_sensors=matching(RE_TEMP_SENSOR),
@@ -50,6 +64,8 @@ class DiscoveredObjects:
             extra_fans=matching(RE_EXTRA_FAN),
             optional=tuple(o for o in OPTIONAL_OBJECTS if o in objects),
             light=lights[0] if lights else None,
+            eddy_probe=eddy[0] if eddy else None,
+            has_z_offset_calibration=Z_OFFSET_CALIBRATION_OBJECT in objects,
         )
 
     @property
@@ -61,13 +77,28 @@ class DiscoveredObjects:
         return "bed_mesh" in self.optional
 
     @property
+    def has_probe(self) -> bool:
+        return "probe" in self.optional
+
+    @property
+    def part_fans(self) -> tuple[str, ...]:
+        """Fans whose speed is the part-cooling speed.
+
+        Klipper's [fan] when the printer has one, otherwise the fan_generic
+        fans that M106 drives (fan0 and fan1 on an SV08).
+        """
+        if "fan" in self.optional:
+            return ("fan",)
+        return tuple(f for f in self.extra_fans if RE_PART_FAN.match(f))
+
+    @property
     def fan_generics(self) -> tuple[str, ...]:
         """Extra fans that can be set with SET_FAN_SPEED."""
         return tuple(f for f in self.extra_fans if f.startswith("fan_generic "))
 
     def all_objects(self) -> list[str]:
         """Every object to subscribe to / query."""
-        extra = [self.light] if self.light else []
+        extra = [o for o in (self.light, self.eddy_probe) if o]
         return (
             PRINTER_OBJECTS
             + list(self.optional)
@@ -85,8 +116,11 @@ def object_name(object_key: str) -> str:
 
 
 def object_label(object_key: str) -> str:
-    """'temperature_sensor host_temp' -> 'Host Temp'."""
-    return object_name(object_key).replace("_", " ").title()
+    """'temperature_sensor host_temp' -> 'Host Temp'; SV08 fans get their role."""
+    name = object_name(object_key)
+    if object_key.startswith("fan_generic ") and name.lower() in _SV08_FAN_LABELS:
+        return _SV08_FAN_LABELS[name.lower()]
+    return name.replace("_", " ").title()
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +180,38 @@ def _apply_leveling(data: SovolPrinterData, status: dict[str, Any]) -> bool:
         data.bed_mesh_profile = status["bed_mesh"]["profile_name"] or None
         changed = True
     return changed
+
+
+def _apply_probe(
+    data: SovolPrinterData, status: dict[str, Any], objects: DiscoveredObjects
+) -> bool:
+    changed = False
+    for key in ("probe", objects.eddy_probe):
+        values = status.get(key) if key else None
+        if not values:
+            continue
+        if values.get("last_z_result") is not None:
+            data.probe_last_z = round(values["last_z_result"], 4)
+        if values.get("last_query") is not None:
+            data.probe_triggered = bool(values["last_query"])
+        if values.get("is_calibrated") is not None:  # Sovol's eddy firmware
+            data.eddy_calibrated = bool(values["is_calibrated"])
+        changed = True
+    return changed
+
+
+def _part_fan_speed(
+    data: SovolPrinterData, status: dict[str, Any], objects: DiscoveredObjects
+) -> bool:
+    """Part-cooling speed from [fan], or the fastest of the SV08's part fans."""
+    if "fan" in status and status["fan"].get("speed") is not None:
+        data.fan_speed = round(status["fan"]["speed"] * 100, 1)
+        return True
+    part_fans = [f for f in objects.part_fans if f != "fan"]
+    if part_fans and any(f in status for f in part_fans):
+        data.fan_speed = max(data.extra_fans.get(f, 0.0) for f in part_fans)
+        return True
+    return False
 
 
 def _light_is_on(values: dict[str, Any]) -> bool | None:
@@ -227,10 +293,6 @@ def apply_status(
         _apply_heater(data.heater_bed, status["heater_bed"])
         changed = True
 
-    if "fan" in status and status["fan"].get("speed") is not None:
-        data.fan_speed = round(status["fan"]["speed"] * 100, 1)
-        changed = True
-
     if "display_status" in status and "message" in status["display_status"]:
         data.display_message = status["display_status"]["message"] or ""
         changed = True
@@ -242,6 +304,9 @@ def apply_status(
     changed |= _apply_motion(data, status)
     changed |= _apply_leveling(data, status)
     changed |= _apply_dynamic(data, status, objects)
+    # After _apply_dynamic, which stores the fan_generic speeds.
+    changed |= _part_fan_speed(data, status, objects)
+    changed |= _apply_probe(data, status, objects)
     return changed
 
 

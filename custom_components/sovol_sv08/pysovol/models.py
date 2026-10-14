@@ -120,6 +120,11 @@ class SovolPrinterData:
     qgl_applied: bool | None = None
     bed_mesh_profile: str | None = None
 
+    # Probe: the inductive probe or Sovol's eddy upgrade
+    probe_last_z: float | None = None
+    probe_triggered: bool | None = None
+    eddy_calibrated: bool | None = None
+
     # Light (output_pin main_led on a stock SV08)
     light_on: bool = False
 

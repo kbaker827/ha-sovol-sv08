@@ -57,6 +57,10 @@ HTTP_TIMEOUT = 10
 LONG_GCODE_TIMEOUT = 900
 RECONNECT_MIN_DELAY = 5
 RECONNECT_MAX_DELAY = 60
+# Moonraker pushes notify_proc_stat_update to every client about once a
+# second, so this long without any message means the printer is gone. Used
+# instead of aiohttp's ping heartbeat, whose timer can outlive the socket.
+WS_IDLE_TIMEOUT = 30
 
 # Webcam entries whose name/location contains one of these are screen
 # mirrors rather than the printer's camera.
@@ -216,8 +220,6 @@ class SovolClient:
     async def async_stop(self) -> None:
         """Stop all connections and clean up."""
         self._should_reconnect = False
-        # Cancel the reader first: closing the socket under it lets aiohttp
-        # re-arm its heartbeat timer as the close frame arrives.
         if self._ws_task and not self._ws_task.done():
             self._ws_task.cancel()
             try:
@@ -329,7 +331,6 @@ class SovolClient:
         async with self._session.ws_connect(
             self.ws_url,
             headers=self.headers,
-            heartbeat=20,
         ) as ws:
             self._ws = ws
             self._connected = True
@@ -337,7 +338,15 @@ class SovolClient:
             await self._subscribe_objects()
             # A connection that came up resets the back-off, however it ends.
             self._reconnect_delay = RECONNECT_MIN_DELAY
-            async for msg in ws:
+            while True:
+                # TimeoutError here is handled by _ws_loop as a lost connection.
+                msg = await ws.receive(timeout=WS_IDLE_TIMEOUT)
+                if msg.type in (
+                    aiohttp.WSMsgType.CLOSE,
+                    aiohttp.WSMsgType.CLOSING,
+                    aiohttp.WSMsgType.CLOSED,
+                ):
+                    break
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     try:
                         await self.handle_ws_message(json.loads(msg.data))
@@ -536,11 +545,27 @@ class SovolClient:
         await self.execute_gcode("\n".join(script), timeout=LONG_GCODE_TIMEOUT)
 
     async def bed_mesh_calibrate(self) -> None:
-        """Mesh the bed, leveling the gantry first if it isn't leveled yet."""
+        """Mesh the bed, leveling the gantry first if it isn't leveled yet.
+
+        With Sovol's eddy upgrade, the printer's own BED_MESH_CALIBRATE macro
+        already levels the gantry (and calibrates Z offset), so it isn't
+        done twice. The stock SV08 macro only heats the bed and homes.
+        """
         script = self._home_first()
-        if self._objects.has_qgl and not self._data.qgl_applied:
+        if (
+            self._objects.has_qgl
+            and self._objects.eddy_probe is None
+            and not self._data.qgl_applied
+        ):
             script += ["QUAD_GANTRY_LEVEL", "G28 Z"]
         script += ["BED_MESH_CALIBRATE"]
+        await self.execute_gcode("\n".join(script), timeout=LONG_GCODE_TIMEOUT)
+
+    async def z_offset_calibrate(self) -> None:
+        """Run Sovol's Z_OFFSET_CALIBRATION (the probe-to-nozzle offset)."""
+        if not self._objects.has_z_offset_calibration:
+            raise ValueError("This printer has no Z_OFFSET_CALIBRATION command")
+        script = self._home_first() + ["Z_OFFSET_CALIBRATION"]
         await self.execute_gcode("\n".join(script), timeout=LONG_GCODE_TIMEOUT)
 
     async def set_bed_temperature(self, temp: float) -> None:

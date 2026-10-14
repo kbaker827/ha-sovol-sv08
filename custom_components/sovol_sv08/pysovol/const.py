@@ -58,16 +58,22 @@ PRINTER_OBJECTS = [
     "toolhead",
     "display_status",
     "webhooks",
-    "fan",
     "idle_timeout",
     "gcode_move",
 ]
 
-# Objects that only some printers have. The SV08 has both, but a modded
-# printer may have removed one, so they are only subscribed when present.
-OPTIONAL_OBJECTS = ["quad_gantry_level", "bed_mesh"]
+# Objects that only some printers have, subscribed only when present.
+# A stock SV08 has no "fan": its part cooling is fan_generic fan0 + fan1.
+# "probe" is the inductive probe, or the eddy probe's alias.
+OPTIONAL_OBJECTS = ["fan", "quad_gantry_level", "bed_mesh", "probe"]
+# Sovol's Z_OFFSET_CALIBRATION command (stock SV08 and SV08 Max)
+Z_OFFSET_CALIBRATION_OBJECT = "z_offset_calibration"
 
 # Regexes for dynamically discovered Klipper objects
+RE_EDDY_PROBE = re.compile(r"^probe_eddy_current\s+\S+")
+# fan_generic fans that cool the part, used when there's no [fan] section.
+# The SV08 drives its part cooling from fan0 (back) and fan1 (front).
+RE_PART_FAN = re.compile(r"^fan_generic\s+(fan[01]|\S*(part|model|cool)\S*)$", re.IGNORECASE)
 RE_FILAMENT_SENSOR = re.compile(r"^filament_(switch|motion)_sensor\s+\S+")
 RE_TEMP_SENSOR = re.compile(r"^temperature_sensor\s+\S+")
 RE_CHAMBER_HEATER = re.compile(r"^heater_generic\s+\S+")

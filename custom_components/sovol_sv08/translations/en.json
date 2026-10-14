@@ -135,6 +135,9 @@
       },
       "bed_mesh_profile": {
         "name": "Bed mesh profile"
+      },
+      "probe_last_z": {
+        "name": "Probe Z result"
       }
     },
     "binary_sensor": {
@@ -152,6 +155,9 @@
       },
       "qgl_applied": {
         "name": "Gantry leveled"
+      },
+      "eddy_calibrated": {
+        "name": "Eddy probe calibrated"
       }
     },
     "button": {
@@ -190,6 +196,9 @@
       },
       "firmware_restart": {
         "name": "Firmware restart"
+      },
+      "z_offset_calibrate": {
+        "name": "Z offset calibrate"
       }
     },
     "camera": {

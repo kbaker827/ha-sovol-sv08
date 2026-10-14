@@ -106,7 +106,7 @@ class TestCommands:
         await client.set_bed_temperature(60)
         await client.set_nozzle_temperature(215.5)
         await client.set_fan_speed(50)
-        await client.set_extra_fan_speed("fan_generic exhaust_fan", 75)
+        await client.set_extra_fan_speed("fan_generic fan3", 75)
         await client.set_speed_factor(120)
         await client.set_flow_rate(98)
         assert moonraker.gcode == [
@@ -115,7 +115,7 @@ class TestCommands:
             "M140 S60",
             "M104 S215.5",
             "M106 S128",
-            "SET_FAN_SPEED FAN=exhaust_fan SPEED=0.75",
+            "SET_FAN_SPEED FAN=fan3 SPEED=0.75",
             "M220 S120",
             "M221 S98",
         ]
@@ -131,6 +131,30 @@ class TestCommands:
             "G28\nBED_MESH_CALIBRATE",
             "G28\nQUAD_GANTRY_LEVEL\nG28 Z\nBED_MESH_CALIBRATE",
         ]
+
+    async def test_z_offset_calibration(self, client, moonraker):
+        await client.z_offset_calibrate()
+        assert moonraker.gcode == ["Z_OFFSET_CALIBRATION"]
+
+    async def test_eddy_mesh_leaves_leveling_to_sovol_macro(self, moonraker):
+        from fake_moonraker import SV08_EDDY_OBJECTS
+
+        moonraker.objects = list(SV08_EDDY_OBJECTS)
+        sv08 = SovolClient("127.0.0.1", moonraker.port)
+        await sv08.async_init()
+        assert sv08.data.eddy_calibrated is True
+        sv08.data.qgl_applied = False
+        await sv08.bed_mesh_calibrate()
+        assert moonraker.gcode == ["BED_MESH_CALIBRATE"]
+        await sv08.async_stop()
+
+    async def test_no_z_offset_calibration_command(self, moonraker):
+        moonraker.objects = ["extruder", "heater_bed"]
+        sv08 = SovolClient("127.0.0.1", moonraker.port)
+        await sv08.async_init()
+        with pytest.raises(ValueError):
+            await sv08.z_offset_calibrate()
+        await sv08.async_stop()
 
     async def test_light_output_pin(self, client, moonraker):
         await client.set_light(False)
@@ -290,6 +314,19 @@ class TestWebSocket:
             {"method": "notify_status_update", "params": [{"print_stats": {"print_duration": 1}}]}
         )
         assert client.data.file_metadata.estimated_time == 600
+
+    async def test_silent_connection_reconnects(self, moonraker, monkeypatch):
+        import pysovol.client as client_module
+
+        # The fake sends nothing after subscribing, like a printer that died.
+        monkeypatch.setattr(client_module, "WS_IDLE_TIMEOUT", 0.2)
+        monkeypatch.setattr(client_module, "RECONNECT_MIN_DELAY", 0.1)
+        sv08 = SovolClient("127.0.0.1", moonraker.port)
+        await sv08.async_init()
+        sv08._reconnect_delay = 0.1
+        await sv08.async_start()
+        await wait_for(lambda: len(moonraker.subscriptions) >= 2, timeout=5)
+        await sv08.async_stop()
 
     async def test_reconnects_after_server_drop(self, moonraker):
         sv08 = SovolClient("127.0.0.1", moonraker.port)
