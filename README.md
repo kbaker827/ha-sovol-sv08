@@ -18,6 +18,7 @@ rebuilt for the SV08's stock Klipper setup.
 
 - [How it works](#how-it-works)
 - [Features](#features)
+- [Filament type and colour](#filament-type-and-colour)
 - [Sovol eddy probe upgrade](#sovol-eddy-probe-upgrade)
 - [Dashboard card](#dashboard-card)
 - [Installation](#installation)
@@ -61,6 +62,8 @@ neopixel strip shows up without any configuration.
 | Time remaining / Print ETA | Uses the slicer's estimate for the first 10 % of a print, then the file position |
 | Filament used | Millimetres of filament extruded |
 | Filename | File being printed (slicer and its estimate as attributes) |
+| Filament | Loaded filament, e.g. `PETG`: Spoolman's active spool, else the print file's ([details](#filament-type-and-colour)) |
+| Spool remaining | Grams left on the active Spoolman spool (only with Spoolman) |
 | Nozzle / Bed temperature and target | Current and target temperatures; `power` and `max_temp` as attributes |
 | Part cooling fan | Fan speed in %. The SV08 has no Klipper `[fan]`; its part cooling is `fan0` + `fan1`, which this reads |
 | Print speed / Flow rate | Current `M220` / `M221` overrides in % |
@@ -150,6 +153,51 @@ connection status and the camera URLs. Your API key is redacted.
 
 ---
 
+## Filament type and colour
+
+The SV08 has no RFID reader, so Klipper doesn't know what's loaded. The
+**Filament** sensor uses the best information available, in this order:
+
+1. **[Spoolman](https://github.com/Donkie/Spoolman)**, if Moonraker is set up
+   for it (`[spoolman]` in `moonraker.conf`): the spool you selected in
+   Mainsail or KlipperScreen, at any time. It switches the moment you pick
+   another spool.
+2. **The print file**: OrcaSlicer, PrusaSlicer and SuperSlicer write the
+   filament type, name and colour into the G-code, which Moonraker reads. It
+   shows the filament the current (or last) print was sliced for.
+
+| | Example |
+|---|---|
+| State | `PETG`, `PLA` (or the filament name if there's no material) |
+| `color` | `#0099FF` |
+| `material` / `name` / `vendor` | `PETG` / `Sovol PETG Blue` / `Sovol` (vendor from Spoolman) |
+| `source` | `spoolman` or `print_file` |
+| `remaining_weight` / `spool_id` | Grams left and spool ID (Spoolman only) |
+
+Template example: `{{ state_attr('sensor.sovol_sv08_filament', 'color') }}`
+
+With Spoolman there's also a **Spool remaining** sensor in grams, handy for a
+"running low" alert:
+
+```yaml
+automation:
+  - alias: "SV08 spool running low"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.sovol_sv08_spool_remaining
+        below: 50
+    actions:
+      - action: notify.notify
+        data:
+          message: "Only {{ states('sensor.sovol_sv08_spool_remaining') }} g of filament left"
+```
+
+Notes:
+- Without Spoolman and before the first print, the sensor is `unknown`.
+- Multi-colour files and spools show their first colour.
+
+---
+
 ## Sovol eddy probe upgrade
 
 With Sovol's eddy probe upgrade (the same `[probe_eddy_current eddy]` setup
@@ -198,8 +246,10 @@ What it shows:
   elapsed time.
 - 🌡️ **Temperature tiles** for the nozzle, the bed, and any chamber
   thermistor or enclosure heater. Tap one to set its target.
+- 🎨 **Loaded filament** on the nozzle tile: a colour dot and the material
+  (e.g. `PETG`). Hover for the brand, the source and grams left.
 - 🔥 **Preheat presets** when idle: one tap sets nozzle and bed (PLA, PETG,
-  ABS, TPU) or turns both off.
+  ABS, TPU) or turns both off. A small dot marks the loaded material.
 - 📐 **Gantry, mesh and eddy status**: whether QGL has been run, which bed
   mesh is loaded and, with Sovol's eddy upgrade, whether the eddy probe is
   calibrated.

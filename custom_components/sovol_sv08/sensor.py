@@ -15,6 +15,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
+    UnitOfMass,
     EntityCategory,
     UnitOfLength,
     UnitOfTemperature,
@@ -211,6 +212,41 @@ PRINTER_SENSORS: list[SovolSensorEntityDescription] = [
     ),
 ]
 
+def _filament_attrs(data: SovolPrinterData) -> dict[str, Any]:
+    filament = data.loaded_filament
+    if filament is None:
+        return {"source": None}
+    return {
+        "color": filament.color,
+        "material": filament.material,
+        "name": filament.name,
+        "vendor": filament.vendor,
+        "source": filament.source,  # "spoolman" or "print_file"
+        "spool_id": filament.spool_id,
+        "remaining_weight": filament.remaining_weight,
+    }
+
+
+# Spoolman's active spool, else what the current/last print file was sliced for.
+FILAMENT_SENSOR = SovolSensorEntityDescription(
+    key="filament",
+    translation_key="filament",
+    icon="mdi:printer-3d-nozzle",
+    value_fn=lambda data: data.loaded_filament.label if data.loaded_filament else None,
+    attrs_fn=_filament_attrs,
+)
+
+SPOOL_REMAINING_SENSOR = SovolSensorEntityDescription(
+    key="spool_remaining_weight",
+    translation_key="spool_remaining_weight",
+    device_class=SensorDeviceClass.WEIGHT,
+    native_unit_of_measurement=UnitOfMass.GRAMS,
+    state_class=SensorStateClass.MEASUREMENT,
+    icon="mdi:weight-gram",
+    value_fn=lambda data: data.active_spool.remaining_weight if data.active_spool else None,
+    attrs_fn=lambda data: {"spool_id": data.active_spool.spool_id if data.active_spool else None},
+)
+
 PROBE_Z_SENSOR = SovolSensorEntityDescription(
     key="probe_last_z",
     translation_key="probe_last_z",
@@ -240,7 +276,9 @@ async def async_setup_entry(
     coordinator: SovolDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     objects = coordinator.client.objects
 
-    descriptions = list(PRINTER_SENSORS)
+    descriptions = [*PRINTER_SENSORS, FILAMENT_SENSOR]
+    if coordinator.client.data.has_spoolman:
+        descriptions.append(SPOOL_REMAINING_SENSOR)
     if objects.has_bed_mesh:
         descriptions.append(BED_MESH_SENSOR)
     if objects.has_probe or objects.eddy_probe:

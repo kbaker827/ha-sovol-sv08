@@ -103,6 +103,27 @@ class TestSetup:
         # Inductive probe: no eddy entity
         assert hass.states.get("binary_sensor.sovol_sv08_eddy_probe_calibrated") is None
 
+    async def test_filament_from_print_file(self, hass, setup_entry):
+        state = hass.states.get("sensor.sovol_sv08_filament")
+        assert state.state == "PETG"
+        assert state.attributes["color"] == "#0099FF"
+        assert state.attributes["source"] == "print_file"
+        assert hass.states.get("sensor.sovol_sv08_spool_remaining") is None
+
+    async def test_filament_from_spoolman(self, hass, entry, moonraker):
+        moonraker.spoolman = {"spool_id": 7, "spools": {"7": {
+            "id": 7, "remaining_weight": 612.4,
+            "filament": {"material": "PLA", "color_hex": "1a1a2e", "vendor": {"name": "Sovol"}}}}}
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        state = hass.states.get("sensor.sovol_sv08_filament")
+        assert (state.state, state.attributes["source"], state.attributes["vendor"]) == (
+            "PLA", "spoolman", "Sovol")
+        assert hass.states.get("sensor.sovol_sv08_spool_remaining").state == "612.4"
+        await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
     async def test_sovol_eddy_upgrade(self, hass, entry, moonraker):
         from fake_moonraker import SV08_EDDY_OBJECTS
 

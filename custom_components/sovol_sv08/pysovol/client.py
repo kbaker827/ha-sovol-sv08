@@ -27,11 +27,14 @@ from .const import (
     ENDPOINT_PRINTER_OBJECTS_QUERY,
     ENDPOINT_PRINTER_RESTART,
     ENDPOINT_SERVER_INFO,
+    ENDPOINT_SPOOLMAN_PROXY,
+    ENDPOINT_SPOOLMAN_STATUS,
     ENDPOINT_WEBCAMS_LIST,
     KLIPPER_READY,
     KLIPPER_SHUTDOWN,
     WS_ENDPOINT,
     WS_METHOD_SUBSCRIBE,
+    WS_NOTIFY_ACTIVE_SPOOL_SET,
     WS_NOTIFY_FILELIST_CHANGED,
     WS_NOTIFY_HISTORY_CHANGED,
     WS_NOTIFY_KLIPPY_DISCONNECTED,
@@ -47,6 +50,7 @@ from .parser import (
     object_name,
     parse_file_list,
     parse_file_metadata,
+    parse_spool,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -204,6 +208,7 @@ class SovolClient:
             await self._discover_webcams()
             await self.fetch_state()
             await self.fetch_file_list()
+            await self.fetch_active_spool()
         except MoonrakerAuthError:
             raise
         except REQUEST_ERRORS as exc:
@@ -399,6 +404,10 @@ class SovolClient:
         elif method == WS_NOTIFY_HISTORY_CHANGED:
             await self.fetch_state()
             await self.fetch_file_list()
+            await self.fetch_active_spool()  # remaining weight went down
+        elif method == WS_NOTIFY_ACTIVE_SPOOL_SET:
+            await self.fetch_active_spool()
+            await self._notify_callbacks()
 
     async def _resubscribe(self) -> None:
         if self._ws is not None and not self._ws.closed:
@@ -479,6 +488,37 @@ class SovolClient:
             _LOGGER.debug("Could not fetch file list: %s", exc)
             return
         self._data.available_files = parse_file_list(data.get("result", []))
+
+    async def fetch_active_spool(self) -> None:
+        """Read the active spool from Spoolman, if Moonraker is set up for it.
+
+        Best effort: without a [spoolman] section Moonraker answers 404, and
+        the loaded filament falls back to the print file's slicer settings.
+        """
+        try:
+            status = await self._get(ENDPOINT_SPOOLMAN_STATUS)
+        except REQUEST_ERRORS:
+            self._data.has_spoolman = False
+            self._data.active_spool = None
+            return
+        result = status.get("result", {})
+        self._data.has_spoolman = True
+        spool_id = result.get("spool_id")
+        if not isinstance(spool_id, int):
+            self._data.active_spool = None
+            return
+        try:
+            data = await self._post(
+                ENDPOINT_SPOOLMAN_PROXY,
+                {"use_v2_response": True, "request_method": "GET", "path": f"/v1/spool/{spool_id}"},
+            )
+        except REQUEST_ERRORS as exc:
+            _LOGGER.debug("Could not read spool %s from Spoolman: %s", spool_id, exc)
+            return  # keep what we had; Spoolman may be restarting
+        reply = data.get("result", {})
+        spool = parse_spool(reply.get("response")) if isinstance(reply, dict) else None
+        if spool is not None:
+            self._data.active_spool = spool
 
     async def _refresh_metadata_if_needed(self) -> None:
         """Fetch slicer metadata once per printed file."""

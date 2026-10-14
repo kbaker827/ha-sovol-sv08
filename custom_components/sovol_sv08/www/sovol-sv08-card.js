@@ -7,7 +7,7 @@
  * gantry leveling, preheat presets and print controls for one printer.
  */
 
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.3.0";
 const DOMAIN = "sovol_sv08";
 
 const ACCENTS = {
@@ -505,7 +505,7 @@ class SovolSV08Card extends HTMLElement {
 
   _renderTemps() {
     const tiles = [];
-    const heater = (name, icon, sensorRole, targetRole, numberRole) => {
+    const heater = (name, icon, sensorRole, targetRole, numberRole, filament = null) => {
       if (!this._eid(sensorRole)) return;
       const s = this._state(sensorRole);
       tiles.push(
@@ -516,10 +516,11 @@ class SovolSV08Card extends HTMLElement {
           target: num(this._state(numberRole)) ?? num(this._state(targetRole)),
           unit: s?.attributes.unit_of_measurement,
           moreInfo: this._eid(numberRole) || this._eid(sensorRole),
+          filament,
         })
       );
     };
-    heater("Nozzle", "mdi:printer-3d-nozzle", "sensor.nozzle_temperature", "sensor.nozzle_target", "number.nozzle_target_setpoint");
+    heater("Nozzle", "mdi:printer-3d-nozzle", "sensor.nozzle_temperature", "sensor.nozzle_target", "number.nozzle_target_setpoint", this._filament());
     heater("Bed", "mdi:radiator", "sensor.bed_temperature", "sensor.bed_target", "number.bed_target_setpoint");
 
     // Chamber thermistors (temperature_sensor with "chamber" in its name)
@@ -547,15 +548,38 @@ class SovolSV08Card extends HTMLElement {
     return tiles.length ? `<div class="temps">${tiles.join("")}</div>` : "";
   }
 
-  _tempTile({ name, icon, current, target, unit, moreInfo }) {
+  // Spoolman's active spool, or the filament the print file was sliced for.
+  _filament() {
+    const s = this._state("sensor.filament");
+    return s && !["unknown", "unavailable"].includes(s.state) ? s : null;
+  }
+
+  _swatch(filament) {
+    if (!filament) return "";
+    const color = filament.attributes.color;
+    if (!color) return `<span class="swatch is-empty" title="${esc(filament.state)}"></span>`;
+    return `<span class="swatch" style="background:${esc(color)}" title="${esc(color)}"></span>`;
+  }
+
+  _filamentLine(filament) {
+    if (!filament) return "";
+    const a = filament.attributes;
+    const where = a.source === "spoolman" ? "Spoolman" : "from the print file";
+    const grams = a.remaining_weight != null ? `, ${Math.round(a.remaining_weight)} g left` : "";
+    const title = `${[a.vendor, a.name || filament.state].filter(Boolean).join(" ")} (${where}${grams})`;
+    return `<div class="temp-filament" title="${esc(title)}">${esc(filament.state)}</div>`;
+  }
+
+  _tempTile({ name, icon, current, target, unit, moreInfo, filament = null }) {
     const u = unit || "°C";
     // A target of 0 °C means "off"; shown in °F that is 32.
     const heating = target != null && target > (u === "°F" ? 32.5 : 0);
     return `
       <button class="temp ${heating ? "heating" : ""}" data-action="more-info" data-entity="${esc(moreInfo || "")}">
-        <div class="temp-head"><ha-icon icon="${icon}"></ha-icon><span class="temp-label">${esc(name)}</span></div>
+        <div class="temp-head"><ha-icon icon="${icon}"></ha-icon><span class="temp-label">${esc(name)}</span>${this._swatch(filament)}</div>
         <div class="temp-value">${current != null ? Math.round(current) : "–"}<span>${esc(u)}</span></div>
         <div class="temp-target">${heating ? `→ ${Math.round(target)}${esc(u)}` : target == null ? "&nbsp;" : "Off"}</div>
+        ${this._filamentLine(filament)}
       </button>`;
   }
 
@@ -571,13 +595,16 @@ class SovolSV08Card extends HTMLElement {
     const nozzleUnit = nozzle.attributes.unit_of_measurement;
     const bedUnit = bed.attributes.unit_of_measurement;
     const clamp = (value, entity) => Math.min(value, Number(entity.attributes.max) || value);
+    const loadedMaterial = String(this._filament()?.attributes.material || "").toUpperCase();
     const chips = presets.map(({ name, nozzle: n, bed: b }) => {
       const nv = clamp(toUnit(n, nozzleUnit), nozzle);
       const bv = clamp(toUnit(b, bedUnit), bed);
       const active = Math.abs(Number(nozzle.state) - nv) < 0.6 && Math.abs(Number(bed.state) - bv) < 0.6;
+      const upper = name.toUpperCase();
+      const isLoaded = Boolean(loadedMaterial) && (loadedMaterial === upper || loadedMaterial.startsWith(`${upper}-`) || loadedMaterial.startsWith(`${upper}+`));
       return `
-        <button class="preset ${active ? "active" : ""}" data-action="preheat" data-nozzle="${nv}" data-bed="${bv}"
-          ${disabled ? "disabled" : ""} title="${esc(`${name}: nozzle ${nv}${nozzleUnit || "°C"}, bed ${bv}${bedUnit || "°C"}`)}">
+        <button class="preset ${active ? "active" : ""} ${isLoaded ? "loaded" : ""}" data-action="preheat" data-nozzle="${nv}" data-bed="${bv}"
+          ${disabled ? "disabled" : ""} title="${esc(`${name}: nozzle ${nv}${nozzleUnit || "°C"}, bed ${bv}${bedUnit || "°C"}${isLoaded ? " (loaded)" : ""}`)}">
           <span class="preset-name">${esc(name)}</span>
           <span class="preset-temp">${nv}° / ${bv}°</span>
         </button>`;
@@ -881,13 +908,20 @@ const STYLES = `
   .temp-value { font-size: 20px; font-weight: 700; }
   .temp-value span { font-size: 12px; font-weight: 500; color: var(--secondary-text-color); margin-left: 1px; }
   .temp-target { font-size: 12px; color: var(--secondary-text-color); }
+  .swatch {
+    display: inline-block; box-sizing: border-box; margin-left: auto; align-self: center;
+    flex: 0 0 14px; width: 14px; height: 14px; border-radius: 50%;
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--primary-text-color) 30%, transparent);
+  }
+  .swatch.is-empty { background: transparent; box-shadow: none; border: 1.5px dashed var(--secondary-text-color); }
+  .temp-filament { margin-top: 2px; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .temp.heating .temp-target { color: var(--state-climate-heat-color, #ff8100); }
   .presets { display: flex; flex-direction: column; gap: 6px; }
   .presets-title { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--secondary-text-color); --mdc-icon-size: 16px; }
   .presets-title ha-icon { color: var(--state-climate-heat-color, #ff8100); }
   .preset-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 6px; }
   .preset {
-    display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 2px; min-width: 0;
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 2px; min-width: 0;
     border-radius: 10px; border: 1px solid var(--divider-color); background: transparent; cursor: pointer; line-height: 1.15;
   }
   .preset:disabled { opacity: .4; cursor: default; }
@@ -895,6 +929,9 @@ const STYLES = `
   .preset-temp { font-size: 11px; color: var(--secondary-text-color); white-space: nowrap; }
   .preset.active { border-color: var(--state-climate-heat-color, #ff8100); background: color-mix(in srgb, var(--state-climate-heat-color, #ff8100) 14%, transparent); }
   .preset.active .preset-temp { color: var(--state-climate-heat-color, #ff8100); font-weight: 600; }
+  .preset.loaded::after {
+    content: ""; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--sv-accent);
+  }
   .preset.active-off { border-color: var(--secondary-text-color); background: color-mix(in srgb, var(--primary-text-color) 7%, transparent); }
   .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
   .stat {

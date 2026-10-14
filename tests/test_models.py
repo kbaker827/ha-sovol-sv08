@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from pysovol.models import FileMetadata, SovolPrinterData
+from pysovol.models import FileMetadata, SovolPrinterData, SpoolData
 
 
 def printing(progress: float, elapsed: float, estimate: float | None = None) -> SovolPrinterData:
@@ -36,6 +36,32 @@ class TestTimeRemaining:
 
     def test_done(self):
         assert printing(1.0, 1000).time_remaining == 0
+
+
+class TestLoadedFilament:
+    def test_nothing_known(self):
+        assert SovolPrinterData().loaded_filament is None
+
+    def test_from_print_file(self):
+        data = SovolPrinterData()
+        data.print_stats.filename = "benchy.gcode"
+        data.file_metadata = FileMetadata(filament_type="PETG", filament_color="#0099FF")
+        filament = data.loaded_filament
+        assert (filament.source, filament.label, filament.color) == ("print_file", "PETG", "#0099FF")
+
+    def test_spoolman_wins(self):
+        data = SovolPrinterData()
+        data.print_stats.filename = "benchy.gcode"
+        data.file_metadata = FileMetadata(filament_type="PETG")
+        data.active_spool = SpoolData(spool_id=7, material="PLA", color="#1A1A2E", remaining_weight=500)
+        filament = data.loaded_filament
+        assert (filament.source, filament.label, filament.spool_id) == ("spoolman", "PLA", 7)
+        assert filament.remaining_weight == 500
+
+    def test_label_falls_back_to_name(self):
+        data = SovolPrinterData()
+        data.active_spool = SpoolData(spool_id=1, name="Mystery spool")
+        assert data.loaded_filament.label == "Mystery spool"
 
 
 class TestStateFlags:

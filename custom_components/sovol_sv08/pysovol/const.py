@@ -17,6 +17,9 @@ ENDPOINT_GCODE_SCRIPT = "/printer/gcode/script"
 ENDPOINT_FILES_LIST = "/server/files/list"
 ENDPOINT_FILES_METADATA = "/server/files/metadata"
 ENDPOINT_WEBCAMS_LIST = "/server/webcams/list"
+# Spoolman, through Moonraker's [spoolman] component (optional)
+ENDPOINT_SPOOLMAN_STATUS = "/server/spoolman/status"
+ENDPOINT_SPOOLMAN_PROXY = "/server/spoolman/proxy"
 
 # HA event names fired on print-state transitions
 EVENT_PRINT_STARTED = "sovol_sv08_print_started"
@@ -43,6 +46,7 @@ WS_NOTIFY_KLIPPY_SHUTDOWN = "notify_klippy_shutdown"
 WS_NOTIFY_KLIPPY_DISCONNECTED = "notify_klippy_disconnected"
 WS_NOTIFY_HISTORY_CHANGED = "notify_history_changed"
 WS_NOTIFY_FILELIST_CHANGED = "notify_filelist_changed"
+WS_NOTIFY_ACTIVE_SPOOL_SET = "notify_active_spool_set"
 
 # Camera. The SV08 ships with a USB camera served by crowsnest/ustreamer,
 # which answers on the mjpg-streamer style "?action=" URLs.

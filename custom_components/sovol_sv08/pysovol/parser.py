@@ -20,7 +20,7 @@ from .const import (
     RE_TEMP_SENSOR,
     Z_OFFSET_CALIBRATION_OBJECT,
 )
-from .models import FileMetadata, FilamentSensor, HeaterData, SovolPrinterData
+from .models import FileMetadata, FilamentSensor, HeaterData, SovolPrinterData, SpoolData
 
 # Output pins with these names are the stock SV08 LED bar; preferred over
 # any other light-like object.
@@ -347,11 +347,52 @@ def parse_file_metadata(result: dict[str, Any]) -> FileMetadata:
         return float(value) if isinstance(value, (int, float)) and value > 0 else None
 
     layers = number("layer_count")
+    colors = result.get("filament_colors")
     return FileMetadata(
         estimated_time=number("estimated_time"),
         layer_count=int(layers) if layers else None,
         filament_total=number("filament_total"),
         slicer=result.get("slicer") or None,
+        filament_type=_first_item(result.get("filament_type")),
+        filament_name=_first_item(result.get("filament_name")),
+        filament_color=_hex_color(colors[0]) if isinstance(colors, list) and colors else None,
+    )
+
+
+def _first_item(value: Any) -> str | None:
+    """Slicers list one value per extruder: 'PETG;PLA' -> 'PETG'."""
+    if not isinstance(value, str):
+        return None
+    first = value.split(";")[0].strip().strip('"').strip()
+    return first or None
+
+
+def _hex_color(value: Any) -> str | None:
+    """'#0099ff', '0099FF' or '0099FFCC' -> '#0099FF'."""
+    if not isinstance(value, str):
+        return None
+    digits = value.strip().lstrip("#")
+    if len(digits) in (6, 8) and all(c in "0123456789abcdefABCDEF" for c in digits):
+        return f"#{digits[:6].upper()}"
+    return None
+
+
+def parse_spool(spool: Any) -> SpoolData | None:
+    """A Spoolman /v1/spool/<id> response."""
+    if not isinstance(spool, dict) or not isinstance(spool.get("id"), int):
+        return None
+    filament = spool.get("filament") if isinstance(spool.get("filament"), dict) else {}
+    vendor = filament.get("vendor") if isinstance(filament.get("vendor"), dict) else {}
+    multi = filament.get("multi_color_hexes")
+    color = filament.get("color_hex") or (multi.split(",")[0] if isinstance(multi, str) else None)
+    remaining = spool.get("remaining_weight")
+    return SpoolData(
+        spool_id=spool["id"],
+        material=_first_item(filament.get("material")),
+        name=_first_item(filament.get("name")),
+        vendor=_first_item(vendor.get("name")),
+        color=_hex_color(color),
+        remaining_weight=round(remaining, 1) if isinstance(remaining, (int, float)) else None,
     )
 
 

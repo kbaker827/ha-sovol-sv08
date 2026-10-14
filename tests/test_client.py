@@ -62,6 +62,48 @@ class TestInit:
             assert not session.closed
 
 
+class TestFilament:
+    async def test_print_file_filament_without_spoolman(self, client):
+        assert not client.data.has_spoolman
+        filament = client.data.loaded_filament
+        assert (filament.source, filament.material, filament.name, filament.color) == (
+            "print_file", "PETG", "Sovol PETG Blue", "#0099FF",
+        )
+
+    async def test_active_spoolman_spool(self, moonraker):
+        moonraker.spoolman = {
+            "spool_id": 7,
+            "spools": {"7": {"id": 7, "remaining_weight": 612.4, "filament": {
+                "material": "PLA", "color_hex": "1a1a2e", "vendor": {"name": "Sovol"}}}},
+        }
+        sv08 = SovolClient("127.0.0.1", moonraker.port)
+        await sv08.async_init()
+        assert sv08.data.has_spoolman
+        filament = sv08.data.loaded_filament
+        assert (filament.source, filament.material, filament.vendor) == ("spoolman", "PLA", "Sovol")
+        await sv08.async_stop()
+
+    async def test_switching_spools_follows_notification(self, moonraker):
+        moonraker.spoolman = {"spool_id": None, "spools": {"9": {"id": 9, "filament": {"material": "ABS"}}}}
+        sv08 = SovolClient("127.0.0.1", moonraker.port)
+        await sv08.async_init()
+        assert sv08.data.has_spoolman and sv08.data.active_spool is None
+        moonraker.spoolman["spool_id"] = 9
+        await sv08.handle_ws_message({"method": "notify_active_spool_set", "params": [{"spool_id": 9}]})
+        assert sv08.data.loaded_filament.material == "ABS"
+        moonraker.spoolman["spool_id"] = None
+        await sv08.handle_ws_message({"method": "notify_active_spool_set", "params": [{"spool_id": None}]})
+        assert sv08.data.loaded_filament.source == "print_file"
+        await sv08.async_stop()
+
+    async def test_unknown_spool_keeps_file_filament(self, moonraker):
+        moonraker.spoolman = {"spool_id": 42, "spools": {}}
+        sv08 = SovolClient("127.0.0.1", moonraker.port)
+        await sv08.async_init()
+        assert sv08.data.loaded_filament.source == "print_file"
+        await sv08.async_stop()
+
+
 class TestUrls:
     @pytest.mark.parametrize(
         ("port", "base", "ws"),

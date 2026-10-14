@@ -109,7 +109,18 @@ class FakeMoonraker:
             {"path": "benchy.gcode", "modified": 300.0},
             {"path": "cube.gcode", "modified": 200.0},
         ]
-        self.metadata = {"benchy.gcode": {"estimated_time": 2400, "layer_count": 120}}
+        self.metadata = {
+            "benchy.gcode": {
+                "estimated_time": 2400,
+                "layer_count": 120,
+                "slicer": "OrcaSlicer",
+                "filament_type": "PETG;PLA",
+                "filament_name": '"Sovol PETG Blue";"Generic PLA"',
+                "filament_colors": ["#0099ff", "#FFFFFF"],
+            }
+        }
+        # None = Moonraker without a [spoolman] section (endpoints answer 404)
+        self.spoolman: dict | None = None
         self.webcams: list[dict] = []
         self.api_key: str | None = None
         self.ws_messages: list[dict] = []
@@ -123,6 +134,8 @@ class FakeMoonraker:
         self.app.router.add_get("/server/files/metadata", self._metadata)
         self.app.router.add_get("/server/webcams/list", self._webcams)
         self.app.router.add_post("/printer/gcode/script", self._gcode)
+        self.app.router.add_get("/server/spoolman/status", self._spoolman_status)
+        self.app.router.add_post("/server/spoolman/proxy", self._spoolman_proxy)
         self.app.router.add_post("/printer/{tail:.*}", self._post)
         self.app.router.add_get("/websocket", self._websocket)
         # nginx's placeholder page while Moonraker is still starting
@@ -176,6 +189,22 @@ class FakeMoonraker:
     async def _post(self, request):
         self.posts.append(request.path)
         return self._result("ok")
+
+    async def _spoolman_status(self, request):
+        if self.spoolman is None:
+            return web.json_response({"error": {"message": "Not Found"}}, status=404)
+        return self._result(
+            {"spoolman_connected": True, "pending_reports": [], "spool_id": self.spoolman.get("spool_id")}
+        )
+
+    async def _spoolman_proxy(self, request):
+        if self.spoolman is None:
+            return web.json_response({"error": {"message": "Not Found"}}, status=404)
+        body = await request.json()
+        spool = self.spoolman.get("spools", {}).get(body["path"].rsplit("/", 1)[-1])
+        if spool is None:
+            return self._result({"response": None, "error": {"status_code": 404, "message": "No spool"}})
+        return self._result({"response": spool, "error": None})
 
     async def _html(self, request):
         return web.Response(text="<html>starting</html>", content_type="text/html")

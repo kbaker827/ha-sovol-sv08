@@ -12,6 +12,7 @@ from pysovol.parser import (
     object_label,
     parse_file_list,
     parse_file_metadata,
+    parse_spool,
 )
 
 
@@ -211,6 +212,48 @@ class TestConfigAndFiles:
         assert meta.layer_count == 120
         assert meta.slicer == "OrcaSlicer"
         assert parse_file_metadata({"estimated_time": 0}).estimated_time is None
+
+    def test_metadata_filament_first_extruder(self):
+        meta = parse_file_metadata(
+            {
+                "filament_type": "PETG;PLA",
+                "filament_name": '"Sovol PETG Blue";"Generic PLA"',
+                "filament_colors": ["#0099ff", "#FFFFFF"],
+            }
+        )
+        assert meta.filament_type == "PETG"
+        assert meta.filament_name == "Sovol PETG Blue"
+        assert meta.filament_color == "#0099FF"
+
+    def test_metadata_without_filament(self):
+        meta = parse_file_metadata({"filament_colors": ["not-a-colour"], "filament_type": ""})
+        assert meta.filament_type is None
+        assert meta.filament_color is None
+
+    def test_parse_spool(self):
+        spool = parse_spool({
+    "id": 7,
+    "remaining_weight": 612.42,
+    "filament": {
+        "name": "SV PLA+ Galaxy Black",
+        "material": "PLA",
+        "color_hex": "1a1a2e",
+        "vendor": {"name": "Sovol"},
+    },
+})
+        assert spool.spool_id == 7
+        assert spool.material == "PLA"
+        assert spool.name == "SV PLA+ Galaxy Black"
+        assert spool.vendor == "Sovol"
+        assert spool.color == "#1A1A2E"
+        assert spool.remaining_weight == 612.4
+
+    def test_parse_spool_multicolour_and_junk(self):
+        spool = parse_spool({"id": 3, "filament": {"multi_color_hexes": "ff0000,00ff00"}})
+        assert spool.color == "#FF0000"
+        assert spool.material is None
+        assert parse_spool(None) is None
+        assert parse_spool({"filament": {}}) is None
 
     def test_file_list_sorted_newest_first(self):
         files = [

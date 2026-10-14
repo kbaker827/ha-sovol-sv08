@@ -46,6 +46,40 @@ class FileMetadata:
     layer_count: int | None = None
     filament_total: float | None = None
     slicer: str | None = None
+    # What the file was sliced for (first extruder), e.g. "PETG", "#0099FF"
+    filament_type: str | None = None
+    filament_name: str | None = None
+    filament_color: str | None = None
+
+
+@dataclass
+class SpoolData:
+    """The active spool in Spoolman."""
+
+    spool_id: int
+    material: str | None = None
+    name: str | None = None
+    vendor: str | None = None
+    color: str | None = None            # "#RRGGBB"
+    remaining_weight: float | None = None  # grams
+
+
+@dataclass(frozen=True)
+class LoadedFilament:
+    """Best guess at what's in the nozzle, and where that came from."""
+
+    source: str                     # "spoolman" or "print_file"
+    material: str | None = None
+    name: str | None = None
+    vendor: str | None = None
+    color: str | None = None
+    remaining_weight: float | None = None
+    spool_id: int | None = None
+
+    @property
+    def label(self) -> str | None:
+        """'PETG', or the full name when there's no material."""
+        return self.material or self.name
 
 
 @dataclass
@@ -125,6 +159,10 @@ class SovolPrinterData:
     probe_triggered: bool | None = None
     eddy_calibrated: bool | None = None
 
+    # Spoolman (None = not set up in Moonraker, or no spool selected)
+    has_spoolman: bool = False
+    active_spool: SpoolData | None = None
+
     # Light (output_pin main_led on a stock SV08)
     light_on: bool = False
 
@@ -199,6 +237,30 @@ class SovolPrinterData:
         if progress <= 0 or elapsed <= 0:
             return None
         return max(0, int(elapsed / progress - elapsed))
+
+    @property
+    def loaded_filament(self) -> LoadedFilament | None:
+        """The Spoolman spool if one is active, else the print file's filament."""
+        spool = self.active_spool
+        if spool is not None:
+            return LoadedFilament(
+                source="spoolman",
+                material=spool.material,
+                name=spool.name,
+                vendor=spool.vendor,
+                color=spool.color,
+                remaining_weight=spool.remaining_weight,
+                spool_id=spool.spool_id,
+            )
+        meta = self.file_metadata
+        if self.print_stats.filename and (meta.filament_type or meta.filament_name):
+            return LoadedFilament(
+                source="print_file",
+                material=meta.filament_type,
+                name=meta.filament_name,
+                color=meta.filament_color,
+            )
+        return None
 
     @property
     def speed_factor_pct(self) -> int:

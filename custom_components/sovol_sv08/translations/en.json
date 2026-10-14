@@ -138,6 +138,12 @@
       },
       "probe_last_z": {
         "name": "Probe Z result"
+      },
+      "filament": {
+        "name": "Filament"
+      },
+      "spool_remaining_weight": {
+        "name": "Spool remaining"
       }
     },
     "binary_sensor": {
