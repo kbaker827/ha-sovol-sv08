@@ -6,6 +6,11 @@
 > Live status, temperatures, camera, print controls, quad gantry leveling,
 > bed mesh, preheat presets and a built-in dashboard card. No cloud needed.
 
+![Sovol SV08 dashboard card: printing (light and dark), paused and idle](docs/images/card-overview.png)
+
+<sub>Mockups of the bundled dashboard card rendered with sample data. Your card
+shows your printer's real camera and values.</sub>
+
 Sister project of [ha-snapmaker-u1](https://github.com/kbaker827/ha-snapmaker-u1),
 rebuilt for the SV08's stock Klipper setup.
 
@@ -151,6 +156,14 @@ there's nothing extra to install or add as a resource.
 ```yaml
 type: custom:sovol-sv08-card
 ```
+
+| Printing (light) | Printing (dark) |
+|---|---|
+| ![Card while printing, light theme](docs/images/card-printing-light.png) | ![Card while printing, dark theme](docs/images/card-printing-dark.png) |
+
+| Paused (teal accent, camera hidden) | Idle with filament alert and preheat (blue accent) |
+|---|---|
+| ![Card while paused](docs/images/card-paused-dark.png) | ![Card while idle with a filament runout alert and preheat presets](docs/images/card-idle-light.png) |
 
 What it shows:
 - 📷 **Live camera** at the top. Tap it for the full camera view. If live
