@@ -928,5 +928,5 @@ if (!customElements.get("sovol-sv08-card")) {
     preview: true,
     documentationURL: "https://github.com/kbaker827/ha-sovol-sv08#dashboard-card",
   });
-  console.info(`%c SOVOL-SV08-CARD %c ${CARD_VERSION} `, "color:#fff;background:#e4002b;font-weight:700", "");
+  console.info(`%c SOVOL-SV08-CARD %c ${CARD_VERSION} `, "color:#fff;background:#009bb9;font-weight:700", "");
 }
