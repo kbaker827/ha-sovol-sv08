@@ -188,7 +188,7 @@ Options (all optional; all except `preheat_presets` are also in the visual edito
 |---|---|---|
 | `entry_id` | first printer | Which printer to show, if you have more than one |
 | `title` | printer name | Card title |
-| `accent_color` | `theme` | `theme`, `orange`, `blue`, `green`, `purple`, `red`, `teal`, `pink`, or any CSS colour like `"#ff6600"` |
+| `accent_color` | `sovol` | `sovol` (Sovol blue, `#009bb9`), `theme` (your Home Assistant theme colour), `orange`, `blue`, `green`, `purple`, `red`, `teal`, `pink`, or any CSS colour like `"#ff6600"` |
 | `show_camera` | `true` | Show the camera feed |
 | `camera_mode` | `live` | `live` video or `snapshot` (refreshed every 5 seconds) |
 | `show_controls` | `true` | Show the control buttons |
@@ -201,7 +201,7 @@ TPU 225 / 50. Values above your printer's limits are capped. Your own list:
 ```yaml
 type: custom:sovol-sv08-card
 title: Workshop SV08
-accent_color: red
+accent_color: theme
 preheat_presets:
   - name: PLA
     nozzle: 215

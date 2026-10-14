@@ -7,10 +7,11 @@
  * gantry leveling, preheat presets and print controls for one printer.
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.1.0";
 const DOMAIN = "sovol_sv08";
 
 const ACCENTS = {
+  sovol: "#009bb9", // Sovol's brand blue (sovol3d.com)
   theme: "var(--primary-color)",
   orange: "#ff8a00",
   blue: "#2f80ed",
@@ -126,7 +127,7 @@ class SovolSV08Card extends HTMLElement {
       camera_mode: "live",
       show_controls: true,
       show_preheat: true,
-      accent_color: "theme",
+      accent_color: "sovol",
     };
   }
 
@@ -273,7 +274,7 @@ class SovolSV08Card extends HTMLElement {
   // ------------------------------------------------------------------
 
   _buildSkeleton() {
-    const accent = ACCENTS[this._config.accent_color] || this._config.accent_color || ACCENTS.theme;
+    const accent = ACCENTS[this._config.accent_color] || this._config.accent_color || ACCENTS.sovol;
     this.shadowRoot.innerHTML = `
       <style>${STYLES}</style>
       <ha-card style="--sv-accent:${esc(accent)}">
@@ -775,7 +776,7 @@ class SovolSV08CardEditor extends HTMLElement {
             custom_value: true,
             options: Object.keys(ACCENTS).map((key) => ({
               value: key,
-              label: key === "theme" ? "Theme color" : key[0].toUpperCase() + key.slice(1),
+              label: { theme: "Theme color", sovol: "Sovol blue" }[key] || key[0].toUpperCase() + key.slice(1),
             })),
           },
         },
