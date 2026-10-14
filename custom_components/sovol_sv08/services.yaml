@@ -1,0 +1,58 @@
+execute_gcode:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: sovol_sv08
+    script:
+      required: true
+      example: "G28"
+      selector:
+        text:
+          multiline: true
+
+set_bed_temperature:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: sovol_sv08
+    temperature:
+      required: true
+      example: 60
+      selector:
+        number:
+          min: 0
+          max: 120
+          unit_of_measurement: "°C"
+
+set_nozzle_temperature:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: sovol_sv08
+    temperature:
+      required: true
+      example: 215
+      selector:
+        number:
+          min: 0
+          max: 320
+          unit_of_measurement: "°C"
+
+start_print:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: sovol_sv08
+    filename:
+      required: true
+      example: "benchy.gcode"
+      selector:
+        text:

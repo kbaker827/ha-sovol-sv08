@@ -1,0 +1,13 @@
+{
+  "domain": "sovol_sv08",
+  "name": "Sovol SV08",
+  "codeowners": ["@kbaker827"],
+  "config_flow": true,
+  "dependencies": ["frontend", "http", "websocket_api"],
+  "documentation": "https://github.com/kbaker827/ha-sovol-sv08",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/kbaker827/ha-sovol-sv08/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

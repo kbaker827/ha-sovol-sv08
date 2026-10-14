@@ -1,0 +1,295 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Sovol SV08",
+        "description": "Enter the address of your Sovol SV08 (the one you open Mainsail with). Leave the API key blank unless you turned on Moonraker authentication.",
+        "data": {
+          "host": "IP address or hostname",
+          "port": "Port",
+          "api_key": "API key (optional)"
+        },
+        "data_description": {
+          "host": "For example 192.168.1.50. Shown on the printer's touchscreen under network settings.",
+          "port": "80 on a stock SV08 (Moonraker behind nginx). Use 7125 to talk to Moonraker directly.",
+          "api_key": "Only needed if you set up Moonraker authentication."
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Sovol SV08",
+        "description": "Update the connection settings. Entities and their history are kept.",
+        "data": {
+          "host": "IP address or hostname",
+          "port": "Port",
+          "api_key": "API key (optional)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "New API key needed",
+        "description": "Moonraker on your Sovol SV08 rejected the API key. Enter a valid one (Mainsail → Settings → Authentication).",
+        "data": {
+          "api_key": "API key"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach Moonraker. Check the address, that the printer is on, and that Mainsail opens in a browser at the same address.",
+      "invalid_auth": "Moonraker rejected the API key. Check it, or leave it blank if Home Assistant is a trusted client."
+    },
+    "abort": {
+      "already_configured": "This printer is already set up.",
+      "reconfigure_successful": "The printer's connection settings were updated.",
+      "reauth_successful": "The API key was updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sovol SV08 options",
+        "data": {
+          "scan_interval": "Fallback poll interval (seconds)",
+          "temperature_unit": "Temperature unit"
+        },
+        "data_description": {
+          "scan_interval": "How often to poll over HTTP while the WebSocket is disconnected (10-300 seconds).",
+          "temperature_unit": "Unit for all printer temperatures. 3D printing normally uses °C, even if the rest of Home Assistant uses °F."
+        }
+      }
+    }
+  },
+  "selector": {
+    "temperature_unit": {
+      "options": {
+        "celsius": "Celsius (°C)",
+        "fahrenheit": "Fahrenheit (°F)",
+        "system": "Home Assistant default"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "print_state": {
+        "name": "Print state",
+        "state": {
+          "standby": "Standby",
+          "printing": "Printing",
+          "paused": "Paused",
+          "complete": "Complete",
+          "error": "Error",
+          "cancelled": "Cancelled"
+        }
+      },
+      "print_progress": {
+        "name": "Print progress"
+      },
+      "current_layer": {
+        "name": "Current layer"
+      },
+      "total_layers": {
+        "name": "Total layers"
+      },
+      "print_duration": {
+        "name": "Print duration"
+      },
+      "total_duration": {
+        "name": "Total duration"
+      },
+      "time_remaining": {
+        "name": "Time remaining"
+      },
+      "print_eta": {
+        "name": "Print ETA"
+      },
+      "filament_used": {
+        "name": "Filament used"
+      },
+      "filename": {
+        "name": "Filename"
+      },
+      "nozzle_temperature": {
+        "name": "Nozzle temperature"
+      },
+      "nozzle_target": {
+        "name": "Nozzle target temperature"
+      },
+      "bed_temperature": {
+        "name": "Bed temperature"
+      },
+      "bed_target": {
+        "name": "Bed target temperature"
+      },
+      "fan_speed": {
+        "name": "Part cooling fan"
+      },
+      "speed_factor": {
+        "name": "Print speed"
+      },
+      "flow_rate": {
+        "name": "Flow rate"
+      },
+      "klipper_state": {
+        "name": "Klipper state"
+      },
+      "toolhead_position": {
+        "name": "Toolhead position"
+      },
+      "bed_mesh_profile": {
+        "name": "Bed mesh profile"
+      }
+    },
+    "binary_sensor": {
+      "printer_ready": {
+        "name": "Printer ready"
+      },
+      "is_printing": {
+        "name": "Printing"
+      },
+      "is_paused": {
+        "name": "Paused"
+      },
+      "has_error": {
+        "name": "Error"
+      },
+      "qgl_applied": {
+        "name": "Gantry leveled"
+      }
+    },
+    "button": {
+      "pause_print": {
+        "name": "Pause print"
+      },
+      "resume_print": {
+        "name": "Resume print"
+      },
+      "cancel_print": {
+        "name": "Cancel print"
+      },
+      "emergency_stop": {
+        "name": "Emergency stop"
+      },
+      "home_all": {
+        "name": "Home all axes"
+      },
+      "home_x": {
+        "name": "Home X"
+      },
+      "home_y": {
+        "name": "Home Y"
+      },
+      "home_z": {
+        "name": "Home Z"
+      },
+      "quad_gantry_level": {
+        "name": "Quad gantry level"
+      },
+      "bed_mesh_calibrate": {
+        "name": "Bed mesh calibrate"
+      },
+      "restart_klipper": {
+        "name": "Restart Klipper"
+      },
+      "firmware_restart": {
+        "name": "Firmware restart"
+      }
+    },
+    "camera": {
+      "webcam": {
+        "name": "Webcam"
+      }
+    },
+    "number": {
+      "nozzle_target_setpoint": {
+        "name": "Nozzle target"
+      },
+      "bed_target_setpoint": {
+        "name": "Bed target"
+      },
+      "fan_speed_setpoint": {
+        "name": "Part cooling fan speed"
+      },
+      "speed_factor_setpoint": {
+        "name": "Print speed override"
+      },
+      "flow_rate_setpoint": {
+        "name": "Flow rate override"
+      }
+    },
+    "select": {
+      "print_file": {
+        "name": "Print file"
+      }
+    },
+    "switch": {
+      "light": {
+        "name": "Light"
+      }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "print_started": "Print started",
+      "print_complete": "Print complete",
+      "print_failed": "Print failed",
+      "print_paused": "Print paused",
+      "print_cancelled": "Print cancelled"
+    }
+  },
+  "services": {
+    "execute_gcode": {
+      "name": "Execute G-code",
+      "description": "Send a G-code command or Klipper macro to the printer.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Printer",
+          "description": "The printer to send it to."
+        },
+        "script": {
+          "name": "G-code",
+          "description": "Command or macro, e.g. G28 or BED_MESH_CALIBRATE. One per line."
+        }
+      }
+    },
+    "set_bed_temperature": {
+      "name": "Set bed temperature",
+      "description": "Set the heated bed target temperature.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Printer",
+          "description": "The printer to control."
+        },
+        "temperature": {
+          "name": "Temperature",
+          "description": "Target in °C; 0 turns the bed off."
+        }
+      }
+    },
+    "set_nozzle_temperature": {
+      "name": "Set nozzle temperature",
+      "description": "Set the nozzle target temperature.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Printer",
+          "description": "The printer to control."
+        },
+        "temperature": {
+          "name": "Temperature",
+          "description": "Target in °C; 0 turns the heater off."
+        }
+      }
+    },
+    "start_print": {
+      "name": "Start print",
+      "description": "Start printing a G-code file already on the printer.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Printer",
+          "description": "The printer to start."
+        },
+        "filename": {
+          "name": "File name",
+          "description": "As shown in the Print file list, e.g. benchy.gcode."
+        }
+      }
+    }
+  }
+}
